@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin Panel — A.Onik Portfolio</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<script type="module">
+  import { initializeApp }                                from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getDatabase, ref, set, onValue }              from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  /* ── FIREBASE CONFIG ── */
+  const firebaseConfig = {
+    apiKey: "AIzaSyDJfJEDyvpyBs0EGVNBxAsruaOrRQ7Lkmw",
+    authDomain: "onik-portfolio-1d1bd.firebaseapp.com",
+    databaseURL: "https://onik-portfolio-1d1bd-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "onik-portfolio-1d1bd",
+    storageBucket: "onik-portfolio-1d1bd.firebasestorage.app",
+    messagingSenderId: "134396301015",
+    appId: "1:134396301015:web:32e149357af1b3ccb76a92"
+  };
+
+  /* ── CLOUDINARY CONFIG ── */
+  const CLD_NAME   = "dv0xflicl";
+  const CLD_PRESET = "portfolio_unsigned";
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getDatabase(app);
+
+  /* ── AUTH STATE ── */
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('admin-panel').style.display  = 'flex';
+      document.getElementById('admin-email').textContent    = user.email;
+      loadData();
+    } else {
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('admin-panel').style.display  = 'none';
+    }
+  });
+
+  /* ── LOGIN ── */
+  window.adminLogin = async () => {
+    const email = document.getElementById('l-email').value.trim();
+    const pass  = document.getElementById('l-pass').value;
+    const btn   = document.getElementById('l-btn');
+    const err   = document.getElementById('l-err');
+    if (!email || !pass) { err.textContent = 'Email ও Password দাও।'; return; }
+    btn.textContent = 'Logging in...'; btn.disabled = true; err.textContent = '';
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(e) {
+      const bad = ['auth/wrong-password','auth/user-not-found','auth/invalid-credential'];
+      err.textContent = bad.includes(e.code) ? '❌ Email বা Password ভুল।' : '❌ ' + e.message;
+      btn.textContent = 'Login'; btn.disabled = false;
+    }
+  };
+
+  /* ── LOGOUT ── */
+  window.adminLogout = async () => {
+    if (confirm('Logout করবে?')) await signOut(auth);
+  };
+
+  /* ── LOAD DATA FROM FIREBASE ── */
+  function loadData() {
+    toast('Data load হচ্ছে...', 'info');
+    onValue(ref(db, 'portfolio'), snap => {
+      const d = snap.val() || {};
+      if (d.hero) {
+        sv('f-name',        d.hero.name);
+        sv('f-title',       d.hero.title);
+        sv('f-desc',        d.hero.description);
+        sv('f-email',       d.hero.email);
+        sv('f-whatsapp',    d.hero.whatsapp);
+        sv('f-linkedin',    d.hero.linkedin);
+        sv('f-facebook',    d.hero.facebook);
+        sv('f-location',    d.hero.location);
+        sv('f-years',       d.hero.yearsExp);
+        if (d.hero.photo) {
+          const img = document.getElementById('photo-preview');
+          img.src = d.hero.photo; img.style.display = 'block';
+          document.getElementById('photo-url').textContent = d.hero.photo;
+        }
+      }
+      if (d.about) {
+        sv('f-p1',    d.about.para1);
+        sv('f-p2',    d.about.para2);
+        sv('f-s1',    d.about.stat1);
+        sv('f-s2',    d.about.stat2);
+        sv('f-s3',    d.about.stat3);
+        sv('f-s4',    d.about.stat4);
+      }
+      if (d.experience)     sv('f-exp',  JSON.stringify(d.experience, null, 2));
+      if (d.skills)         sv('f-sk',   JSON.stringify(d.skills, null, 2));
+      if (d.education)      sv('f-edu',  JSON.stringify(d.education, null, 2));
+      if (d.certifications) sv('f-cert', JSON.stringify(d.certifications, null, 2));
+      toast('✅ Data loaded!', 'success');
+    }, { onlyOnce: true });
+  }
+
+  function sv(id, val) { const el = document.getElementById(id); if (el && val != null) el.value = val; }
+  function gv(id)      { const el = document.getElementById(id); return el ? el.value : ''; }
+
+  /* ── PHOTO UPLOAD via CLOUDINARY ── */
+  window.uploadPhoto = async () => {
+    const file = document.getElementById('photo-file').files[0];
+    if (!file) { toast('ছবি select করো।', 'error'); return; }
+    if (file.size > 10*1024*1024) { toast('ছবি 10MB-এর বেশি নয়।', 'error'); return; }
+    const btn = document.getElementById('upload-btn');
+    btn.textContent = '⏳ Uploading...'; btn.disabled = true;
+    toast('Upload হচ্ছে...', 'info');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', CLD_PRESET);
+      fd.append('folder', 'portfolio');
+      const res  = await fetch(`https://api.cloudinary.com/v1_1/${CLD_NAME}/image/upload`, {method:'POST', body:fd});
+      const data = await res.json();
+      if (!data.secure_url) throw new Error(data.error?.message || 'Upload failed');
+      const img = document.getElementById('photo-preview');
+      img.src = data.secure_url; img.style.display = 'block';
+      document.getElementById('photo-url').textContent = data.secure_url;
+      await set(ref(db, 'portfolio/hero/photo'), data.secure_url);
+      toast('✅ ছবি upload ও save হয়েছে!', 'success');
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+    btn.textContent = '📷 Upload Photo'; btn.disabled = false;
+  };
+
+  /* ── SAVE HERO ── */
+  window.saveHero = async () => {
+    try {
+      const img    = document.getElementById('photo-preview');
+      const imgSrc = img ? img.getAttribute('src') : '';
+      const photo  = (imgSrc && imgSrc.startsWith('http')) ? imgSrc : '';
+      await set(ref(db, 'portfolio/hero'), {
+        name: gv('f-name'), title: gv('f-title'), description: gv('f-desc'),
+        email: gv('f-email'), whatsapp: gv('f-whatsapp'),
+        linkedin: gv('f-linkedin'), facebook: gv('f-facebook'),
+        location: gv('f-location'), yearsExp: gv('f-years'), photo
+      });
+      toast('✅ Hero section saved!', 'success');
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+  };
+
+  /* ── SAVE ABOUT ── */
+  window.saveAbout = async () => {
+    try {
+      await set(ref(db, 'portfolio/about'), {
+        para1:gv('f-p1'), para2:gv('f-p2'),
+        stat1:gv('f-s1'), stat2:gv('f-s2'), stat3:gv('f-s3'), stat4:gv('f-s4')
+      });
+      toast('✅ About section saved!', 'success');
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+  };
+
+  /* ── SAVE JSON SECTIONS ── */
+  window.saveExp  = async () => saveJSON('f-exp',  'portfolio/experience',    '✅ Experience saved!');
+  window.saveSk   = async () => saveJSON('f-sk',   'portfolio/skills',        '✅ Skills saved!');
+  window.saveEdu  = async () => saveJSON('f-edu',  'portfolio/education',     '✅ Education saved!');
+  window.saveCert = async () => saveJSON('f-cert', 'portfolio/certifications','✅ Certifications saved!');
+
+  async function saveJSON(fieldId, dbPath, successMsg) {
+    try {
+      const data = JSON.parse(document.getElementById(fieldId).value);
+      await set(ref(db, dbPath), data);
+      toast(successMsg, 'success');
+    } catch(e) { toast('❌ JSON ভুল: ' + e.message, 'error'); }
+  }
+
+  /* ── SAVE ALL ── */
+  window.saveAll = async () => {
+    const btn = document.getElementById('save-all-btn');
+    btn.textContent = '⏳ Saving...'; btn.disabled = true;
+    await saveHero();
+    await saveAbout();
+    await saveExp().catch(()=>{});
+    await saveSk().catch(()=>{});
+    await saveEdu().catch(()=>{});
+    await saveCert().catch(()=>{});
+    toast('✅ সব কিছু Firebase-এ save হয়েছে!', 'success');
+    btn.textContent = '💾 Save All to Firebase'; btn.disabled = false;
+  };
+
+  /* ── TOAST ── */
+  window.toast = (msg, type='success') => {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = 'toast show ' + type;
+    clearTimeout(window._tt);
+    window._tt = setTimeout(() => t.classList.remove('show'), 3500);
+  };
+
+  /* Enter key on login */
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') adminLogin();
+  });
+</script>
+
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0f0e0c; --s1:#1a1814; --s2:#232018; --br:#2e2b24;
+  --gold:#c08b3a; --goldf:#e0a84e; --text:#e8e0d0; --muted:#7a6f62;
+  --red:#e05050; --green:#50c878; --blue:#5090e0;
+  --hd:'Syne',sans-serif; --bd:'Inter',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--bd);}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+.lcard{width:min(440px,92vw);border:1px solid var(--br);background:var(--s1);padding:3rem;}
+.l-logo{font-family:'Playfair Display',Georgia,serif;font-size:2.5rem;font-weight:900;color:#fdf9f3;margin-bottom:.3rem;}
+.l-logo span{color:var(--gold);}
+.l-sub{font-family:var(--hd);font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-bottom:2.5rem;}
+.lbl{display:block;font-family:var(--hd);font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;}
+.linp{width:100%;padding:.85rem 1rem;background:var(--s2);border:1px solid var(--br);color:var(--text);font-family:var(--bd);font-size:.9rem;outline:none;margin-bottom:1.2rem;transition:border-color .3s;}
+.linp:focus{border-color:var(--gold);}
+.lbtn{width:100%;padding:1rem;background:var(--gold);color:var(--bg);font-family:var(--hd);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;font-weight:700;border:none;cursor:pointer;transition:background .3s;}
+.lbtn:hover:not(:disabled){background:var(--goldf);}
+.lbtn:disabled{opacity:.6;cursor:not-allowed;}
+.lerr{font-size:.78rem;color:var(--red);margin-top:.8rem;min-height:1.4em;}
+.lnote{font-size:.72rem;color:var(--muted);margin-top:1.2rem;line-height:1.7;border-top:1px solid var(--br);padding-top:1rem;}
+
+/* LAYOUT */
+#admin-panel{min-height:100vh;}
+.sidebar{width:260px;min-width:260px;background:var(--s1);border-right:1px solid var(--br);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.sb-logo{padding:2rem 1.5rem;border-bottom:1px solid var(--br);}
+.sb-logo h1{font-family:'Playfair Display',Georgia,serif;font-size:1.8rem;font-weight:900;color:#fdf9f3;}
+.sb-logo h1 span{color:var(--gold);}
+.sb-logo p{font-family:var(--hd);font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-top:.25rem;}
+.sb-user{padding:1rem 1.5rem;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:.75rem;}
+.udot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);}
+.uemail{font-size:.73rem;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-nav{flex:1;padding:.8rem 0;}
+.nglbl{font-family:var(--hd);font-size:.52rem;letter-spacing:.3em;text-transform:uppercase;color:#3a3830;padding:.9rem 1.5rem .3rem;}
+.ni{display:flex;align-items:center;gap:.75rem;padding:.75rem 1.5rem;cursor:pointer;font-family:var(--hd);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);transition:all .2s;border-left:2px solid transparent;}
+.ni:hover{color:var(--text);background:rgba(255,255,255,.03);}
+.ni.active{color:var(--goldf);background:rgba(192,139,58,.07);border-left-color:var(--gold);}
+.ni-ico{font-size:1rem;width:20px;text-align:center;}
+.sb-foot{padding:1.5rem;border-top:1px solid var(--br);}
+.lout-btn{width:100%;padding:.75rem;background:transparent;border:1px solid var(--br);color:var(--muted);font-family:var(--hd);font-size:.64rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;transition:all .3s;}
+.lout-btn:hover{border-color:var(--red);color:var(--red);}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;padding:2.5rem 3rem;}
+.panel{display:none;}
+.panel.active{display:block;}
+.ph{margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--br);}
+.pt{font-family:var(--hd);font-size:1.4rem;font-weight:700;color:#fdf9f3;margin-bottom:.3rem;}
+.pd{font-size:.8rem;color:var(--muted);}
+
+/* FIELDS */
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;}
+.fg4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;}
+.fw{margin-bottom:1.4rem;}
+.fl{display:block;font-family:var(--hd);font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;}
+.fi,.fta{width:100%;padding:.8rem 1rem;background:var(--s2);border:1px solid var(--br);color:var(--text);font-family:var(--bd);font-size:.88rem;outline:none;transition:border-color .3s;resize:vertical;}
+.fi:focus,.fta:focus{border-color:var(--gold);}
+.fta{min-height:90px;}
+.fta.code{font-family:'Courier New',monospace;font-size:.76rem;min-height:280px;line-height:1.65;}
+.slbl{font-family:var(--hd);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin:2rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--br);}
+
+/* PHOTO ZONE */
+.pzone{border:2px dashed var(--br);padding:2rem;text-align:center;cursor:pointer;background:var(--s2);transition:border-color .3s;}
+.pzone:hover{border-color:var(--gold);}
+#photo-preview{width:110px;height:140px;object-fit:cover;border:2px solid var(--gold);margin:0 auto 1rem;display:none;}
+#photo-file{display:none;}
+.purl{margin-top:.8rem;padding:.6rem .9rem;background:var(--s1);border:1px solid var(--br);font-size:.68rem;color:var(--muted);word-break:break-all;}
+.cinfo{background:rgba(192,139,58,.06);border:1px solid rgba(192,139,58,.22);padding:1.2rem 1.4rem;margin-bottom:1.5rem;font-size:.78rem;color:var(--muted);line-height:1.9;}
+.cinfo strong{color:var(--goldf);}
+.cinfo code{color:var(--goldf);font-family:'Courier New',monospace;background:rgba(192,139,58,.1);padding:.1rem .3rem;}
+
+/* JSON HINT */
+.jh{background:rgba(80,144,224,.05);border:1px solid rgba(80,144,224,.18);padding:1rem 1.2rem;margin-bottom:1rem;font-size:.74rem;color:var(--muted);line-height:1.8;}
+.jh code{color:#88b8f0;font-family:'Courier New',monospace;font-size:.72rem;}
+
+/* BUTTONS */
+.save-btn{padding:.85rem 2.4rem;background:var(--gold);color:var(--bg);font-family:var(--hd);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;font-weight:700;border:none;cursor:pointer;transition:background .3s;margin-top:1.5rem;}
+.save-btn:hover{background:var(--goldf);}
+.upbtn{display:inline-block;margin-top:1rem;padding:.7rem 1.6rem;background:transparent;border:1px solid var(--br);color:var(--text);font-family:var(--hd);font-size:.64rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;transition:all .3s;}
+.upbtn:hover:not(:disabled){border-color:var(--gold);color:var(--goldf);}
+.upbtn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* DASHBOARD */
+.qg{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
+.qc{background:var(--s1);border:1px solid var(--br);padding:1.5rem;text-align:center;}
+.qn{font-family:'Playfair Display',Georgia,serif;font-size:2rem;font-weight:700;color:var(--gold);}
+.ql{font-family:var(--hd);font-size:.56rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-top:.3rem;}
+.ibox{background:var(--s1);border:1px solid var(--br);padding:2rem;margin-bottom:1.5rem;}
+.ibox h3{font-family:var(--hd);font-size:.95rem;color:#fdf9f3;margin-bottom:1rem;}
+.ibox p{font-size:.8rem;color:var(--muted);line-height:2.1;}
+.save-all-btn{padding:1rem 3rem;background:#fdf9f3;color:var(--bg);font-family:var(--hd);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;font-weight:700;border:none;cursor:pointer;transition:all .3s;margin-top:1rem;}
+.save-all-btn:hover:not(:disabled){background:var(--goldf);}
+.save-all-btn:disabled{opacity:.6;cursor:not-allowed;}
+.prev-link{display:inline-flex;align-items:center;gap:.5rem;font-family:var(--hd);font-size:.64rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);text-decoration:none;padding:.6rem 1.2rem;border:1px solid var(--br);transition:all .3s;margin-bottom:1.5rem;}
+.prev-link:hover{border-color:var(--gold);color:var(--goldf);}
+
+/* TOAST */
+.toast{position:fixed;bottom:2rem;right:2rem;z-index:99999;padding:.9rem 1.5rem;font-family:var(--hd);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;border-left:3px solid var(--gold);background:var(--s1);color:var(--text);transform:translateY(100px);opacity:0;transition:all .4s;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.success{border-color:var(--green);color:var(--green);}
+.toast.error{border-color:var(--red);color:var(--red);}
+.toast.info{border-color:var(--blue);color:var(--blue);}
+
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .main{padding:1.5rem;}
+  .fg2,.fg4{grid-template-columns:1fr;}
+  .qg{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="lcard">
+    <div class="l-logo">A<span>.</span>Onik</div>
+    <p class="l-sub">🔐 Admin Panel — Secure Access</p>
+    <label class="lbl">Email Address</label>
+    <input type="email" id="l-email" class="linp" placeholder="your@email.com" autocomplete="email"/>
+    <label class="lbl">Password</label>
+    <input type="password" id="l-pass" class="linp" placeholder="••••••••" autocomplete="current-password"/>
+    <button class="lbtn" id="l-btn" onclick="adminLogin()">🔓 Login to Admin Panel</button>
+    <div class="lerr" id="l-err"></div>
+    <p class="lnote">🛡️ Firebase Authentication দিয়ে protect করা। শুধুমাত্র registered admin login করতে পারবে। সব changes Firebase Realtime Database-এ permanently save হয়।</p>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel" style="display:none;">
+
+  <div class="sidebar">
+    <div class="sb-logo"><h1>A<span>.</span>Onik</h1><p>Admin Panel</p></div>
+    <div class="sb-user"><div class="udot"></div><span class="uemail" id="admin-email">admin</span></div>
+    <nav class="sb-nav">
+      <p class="nglbl">Overview</p>
+      <div class="ni active" onclick="showPanel('dashboard',this)"><span class="ni-ico">🏠</span>Dashboard</div>
+      <p class="nglbl">Portfolio Content</p>
+      <div class="ni" onclick="showPanel('hero',this)"><span class="ni-ico">👤</span>Hero &amp; Photo</div>
+      <div class="ni" onclick="showPanel('about',this)"><span class="ni-ico">📄</span>About Section</div>
+      <div class="ni" onclick="showPanel('exp',this)"><span class="ni-ico">💼</span>Experience</div>
+      <div class="ni" onclick="showPanel('skills',this)"><span class="ni-ico">⚡</span>Skills</div>
+      <div class="ni" onclick="showPanel('edu',this)"><span class="ni-ico">🎓</span>Education</div>
+      <div class="ni" onclick="showPanel('cert',this)"><span class="ni-ico">🏅</span>Certifications</div>
+    </nav>
+    <div class="sb-foot"><button class="lout-btn" onclick="adminLogout()">↩ Logout</button></div>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="ph"><h2 class="pt">Dashboard</h2><p class="pd">তোমার portfolio-র সব কিছু এখান থেকে control করো।</p></div>
+      <a href="index.html" target="_blank" class="prev-link">🔗 Portfolio Preview করো →</a>
+      <div class="qg">
+        <div class="qc"><div class="qn">6</div><div class="ql">Sections</div></div>
+        <div class="qc"><div class="qn">6</div><div class="ql">Certificates</div></div>
+        <div class="qc"><div class="qn">4</div><div class="ql">Skill Areas</div></div>
+        <div class="qc"><div class="qn">3</div><div class="ql">Education</div></div>
+      </div>
+      <div class="ibox">
+        <h3>💾 একবারে সব Save করো</h3>
+        <p>সব section edit করার পর এই বোতাম চাপলে সব কিছু Firebase-এ save হবে।</p>
+        <button class="save-all-btn" id="save-all-btn" onclick="saveAll()">💾 Save All to Firebase</button>
+      </div>
+      <div class="ibox">
+        <h3>📋 কীভাবে ব্যবহার করবে</h3>
+        <p>1️⃣ Sidebar থেকে যেকোনো section-এ যাও</p>
+        <p>2️⃣ Field edit করো (নাম, bio, ছবি, skills ইত্যাদি)</p>
+        <p>3️⃣ নিচের <strong style="color:var(--goldf)">Save</strong> বোতাম চাপো</p>
+        <p>4️⃣ Portfolio-তে <strong style="color:var(--goldf)">Realtime</strong> update হবে</p>
+        <p>5️⃣ Data <strong style="color:var(--goldf)">Firebase-এ permanently</strong> থাকবে</p>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div class="panel" id="panel-hero">
+      <div class="ph"><h2 class="pt">👤 Hero &amp; Profile Photo</h2><p class="pd">নাম, পরিচয়, যোগাযোগ এবং প্রোফাইল ছবি edit করো।</p></div>
+
+      <p class="slbl">📷 Profile Photo — Cloudinary (Free 25GB)</p>
+      <div class="cinfo">
+        ✅ <strong>Cloudinary configured!</strong><br>
+        ☁️ Cloud Name: <code>dv0xflicl</code> &nbsp;|&nbsp; 📋 Preset: <code>portfolio_unsigned</code> (Unsigned) ✅<br>
+        নিচে ছবি select করো — Cloudinary-তে upload হবে, Firebase-এ URL save হবে।
+      </div>
+      <div class="pzone" onclick="document.getElementById('photo-file').click()">
+        <img id="photo-preview" src="" alt="Profile Photo"/>
+        <p style="font-size:.78rem;color:var(--muted)">Click করে ছবি select করো</p>
+        <p style="font-size:.68rem;color:#3a3830;margin-top:.3rem">Recommended: 370×460px · JPG / PNG · Max 10MB</p>
+      </div>
+      <input type="file" id="photo-file" accept="image/*" onchange="uploadPhoto()"/>
+      <button id="upload-btn" class="upbtn" onclick="document.getElementById('photo-file').click()">📷 Choose &amp; Upload Photo</button>
+      <div class="purl" id="photo-url">ছবি upload করার পর URL এখানে দেখাবে...</div>
+
+      <p class="slbl">👤 Personal Info</p>
+      <div class="fg2">
+        <div class="fw"><label class="fl">Full Name</label><input type="text" id="f-name" class="fi" placeholder="MD. Ashikur Rahman Onik"/></div>
+        <div class="fw"><label class="fl">Badge Number (ছবির নিচে)</label><input type="text" id="f-years" class="fi" placeholder="5.0"/></div>
+      </div>
+      <div class="fw"><label class="fl">Job Title / Tagline</label><input type="text" id="f-title" class="fi" placeholder="Computer Operator & Instructor · Natore"/></div>
+      <div class="fw"><label class="fl">Hero Description</label><textarea id="f-desc" class="fta" placeholder="Detail-oriented professional..."></textarea></div>
+
+      <p class="slbl">📬 Contact Info</p>
+      <div class="fg2">
+        <div class="fw"><label class="fl">Email Address</label><input type="email" id="f-email" class="fi" placeholder="anikashikur51@gmail.com"/></div>
+        <div class="fw"><label class="fl">WhatsApp (country code সহ)</label><input type="text" id="f-whatsapp" class="fi" placeholder="+880 1973 321755"/></div>
+      </div>
+      <div class="fg2">
+        <div class="fw"><label class="fl">LinkedIn URL</label><input type="url" id="f-linkedin" class="fi" placeholder="https://linkedin.com/in/anikashikur51"/></div>
+        <div class="fw"><label class="fl">Facebook URL</label><input type="url" id="f-facebook" class="fi" placeholder="https://facebook.com/anikashikur51"/></div>
+      </div>
+      <div class="fw"><label class="fl">Location</label><input type="text" id="f-location" class="fi" placeholder="Bagatipara, Natore, Bangladesh"/></div>
+      <button class="save-btn" onclick="saveHero()">💾 Save Hero Section</button>
+    </div>
+
+    <!-- ABOUT -->
+    <div class="panel" id="panel-about">
+      <div class="ph"><h2 class="pt">📄 About Section</h2><p class="pd">About me text ও stats edit করো।</p></div>
+      <p class="slbl">✍️ About Text</p>
+      <div class="fw"><label class="fl">Paragraph 1 (HTML ব্যবহার করা যাবে, যেমন &lt;b&gt;bold&lt;/b&gt;)</label><textarea id="f-p1" class="fta" placeholder="A detail-oriented Computer Operator..."></textarea></div>
+      <div class="fw"><label class="fl">Paragraph 2</label><textarea id="f-p2" class="fta" placeholder="Beyond technical skills..."></textarea></div>
+      <p class="slbl">📊 Stats (৪টা box)</p>
+      <div class="fg4">
+        <div class="fw"><label class="fl">Box 1 (SSC GPA)</label><input type="text" id="f-s1" class="fi" placeholder="5.0"/></div>
+        <div class="fw"><label class="fl">Box 2 (BTEB)</label><input type="text" id="f-s2" class="fi" placeholder="A+"/></div>
+        <div class="fw"><label class="fl">Box 3 (Hours)</label><input type="text" id="f-s3" class="fi" placeholder="360"/></div>
+        <div class="fw"><label class="fl">Box 4 (Years)</label><input type="text" id="f-s4" class="fi" placeholder="3+"/></div>
+      </div>
+      <button class="save-btn" onclick="saveAbout()">💾 Save About Section</button>
+    </div>
+
+    <!-- EXPERIENCE -->
+    <div class="panel" id="panel-exp">
+      <div class="ph"><h2 class="pt">💼 Experience</h2><p class="pd">কাজের অভিজ্ঞতা JSON format-এ edit করো।</p></div>
+      <div class="jh">📌 Format: <code>[{"role":"Job Title","org":"Company","dateFrom":"July 2025","dateTo":"Present","location":"City","points":["কাজ ১","কাজ ২"]}]</code></div>
+      <div class="fw"><label class="fl">Experience Data (JSON Array)</label>
+      <textarea id="f-exp" class="fta code" placeholder='[
+  {
+    "role": "Computer Operator & Instructor",
+    "org": "Sabuj Computer Book Campus and Photostat",
+    "dateFrom": "July 2025",
+    "dateTo": "Present",
+    "location": "Natore, Bangladesh",
+    "points": [
+      "High-speed typing for official documents in Bengali and English.",
+      "Training sessions for students on MS Word, Excel, PowerPoint.",
+      "Manage online applications and digital file management."
+    ]
+  },
+  {
+    "role": "Computer Office Application Trainee",
+    "org": "Ferdoshi Computer Training Center",
+    "dateFrom": "July 2022",
+    "dateTo": "Dec 2022",
+    "location": "Rajshahi",
+    "points": [
+      "Grade: A+ — BTEB Certified (360 Hours).",
+      "Excel sheets for record-keeping with formulas.",
+      "Structured slide decks for academic presentations."
+    ]
+  }
+]'></textarea></div>
+      <button class="save-btn" onclick="saveExp()">💾 Save Experience</button>
+    </div>
+
+    <!-- SKILLS -->
+    <div class="panel" id="panel-skills">
+      <div class="ph"><h2 class="pt">⚡ Skills</h2><p class="pd">Skills JSON format-এ edit করো।</p></div>
+      <div class="jh">📌 Format: <code>[{"category":"Computer Skills","items":["MS Word","MS Excel","Photoshop"]}]</code></div>
+      <div class="fw"><label class="fl">Skills Data (JSON Array)</label>
+      <textarea id="f-sk" class="fta code" placeholder='[
+  {"category":"Computer Skills","items":["MS Word","MS Excel","MS PowerPoint","Adobe Photoshop","Lightroom Classic"]},
+  {"category":"Office & Admin","items":["Data Entry","Email Communication","Document Management","Internet Research","File Organization"]},
+  {"category":"Creative","items":["Graphic Design","Video Editing","Photo Retouching","Slide Design"]},
+  {"category":"Soft Skills","items":["Communication","Teamwork","Time Management","Quick Learner","Accuracy & Discipline"]}
+]'></textarea></div>
+      <button class="save-btn" onclick="saveSk()">💾 Save Skills</button>
+    </div>
+
+    <!-- EDUCATION -->
+    <div class="panel" id="panel-edu">
+      <div class="ph"><h2 class="pt">🎓 Education</h2><p class="pd">শিক্ষাগত যোগ্যতা JSON format-এ edit করো।</p></div>
+      <div class="jh">📌 Format: <code>[{"degree":"B.A. Hons","institution":"Rajshahi College","year":"2024–Present","gpa":"—","status":"Ongoing"}]</code></div>
+      <div class="fw"><label class="fl">Education Data (JSON Array)</label>
+      <textarea id="f-edu" class="fta code" placeholder='[
+  {"degree":"Bachelor of Arts (B.A. Hons) — History","institution":"Rajshahi College · National University","year":"2024 – Present","gpa":"—","status":"Ongoing"},
+  {"degree":"Higher Secondary Certificate — Commerce","institution":"Rajshahi Govt. City College · Rajshahi Board","year":"2022 – 2024","gpa":"4.25","status":"GPA / 5.00"},
+  {"degree":"Secondary School Certificate — Science","institution":"Jigori High School · Rajshahi Board","year":"2020 – 2022","gpa":"5.00 ⭐","status":"Perfect GPA"}
+]'></textarea></div>
+      <button class="save-btn" onclick="saveEdu()">💾 Save Education</button>
+    </div>
+
+    <!-- CERTIFICATIONS -->
+    <div class="panel" id="panel-cert">
+      <div class="ph"><h2 class="pt">🏅 Certifications</h2><p class="pd">সার্টিফিকেট JSON format-এ edit করো।</p></div>
+      <div class="jh">📌 Format: <code>[{"icon":"🏅","name":"Certificate Name","issuer":"Organization"}]</code></div>
+      <div class="fw"><label class="fl">Certifications Data (JSON Array)</label>
+      <textarea id="f-cert" class="fta code" placeholder='[
+  {"icon":"🏅","name":"National Skill Standard Basic (360 Hrs)","issuer":"BTEB, Bangladesh"},
+  {"icon":"📷","name":"Adobe Photoshop Lightroom Classic","issuer":"Mind Luster"},
+  {"icon":"📊","name":"Microsoft Excel Basics","issuer":"Robi 10 Minute School"},
+  {"icon":"📝","name":"CV Writing","issuer":"Robi 10 Minute School"},
+  {"icon":"🎬","name":"Basic Graphic Design & Video Editing","issuer":"Shomvob Academy"},
+  {"icon":"💡","name":"Self-Confidence Technique","issuer":"Shomvob Academy"}
+]'></textarea></div>
+      <button class="save-btn" onclick="saveCert()">💾 Save Certifications</button>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /admin-panel -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showPanel(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
