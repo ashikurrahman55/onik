@@ -407,9 +407,36 @@ const getInfoRows=()=>[...document.querySelectorAll("#info-rows-container .item-
 
 window.addExp=(e={})=>{
   e=e||{};
-  const pts=(e.points||[]).join("\n");
   const b=document.createElement("div");b.className="card-block";
-  b.innerHTML=`<div class="card-header"><span class="card-title">${esc(e.role||"notun Experience")}</span><div class="card-actions"><button class="icon-btn" onclick="toggleCard(this)">v</button><button class="del-btn" onclick="this.closest('.card-block').remove()">X Remove</button></div></div><div class="card-body"><div class="fg2"><div class="fw"><label class="fl">Job Title / Role</label><input type="text" class="fi exp-role" placeholder="Computer Operator" value="${esc(e.role||"")}" oninput="this.closest('.card-block').querySelector('.card-title').textContent=this.value||'notun Experience'"/></div><div class="fw"><label class="fl">Organization / Company</label><input type="text" class="fi exp-org" placeholder="Sabuj Computer" value="${esc(e.org||"")}"/></div></div><div class="fg3"><div class="fw"><label class="fl">Date From</label><input type="text" class="fi exp-from" placeholder="July 2025" value="${esc(e.dateFrom||"")}"/></div><div class="fw"><label class="fl">Date To</label><input type="text" class="fi exp-to" placeholder="Present" value="${esc(e.dateTo||"")}"/></div><div class="fw"><label class="fl">Location</label><input type="text" class="fi exp-loc" placeholder="Natore" value="${esc(e.location||"")}"/></div></div><div class="fw"><label class="fl">Kaj er Biboron — protiti point alada laine</label><textarea class="fta exp-pts" placeholder="High-speed typing.&#10;Training sessions.">${esc(pts)}</textarea></div></div>`;
+  b.innerHTML=`
+    <div class="card-header">
+      <span class="card-title">${esc(e.role||"নতুন Experience")}</span>
+      <div class="card-actions">
+        <button class="icon-btn" onclick="toggleCard(this)">&#9660;</button>
+        <button class="del-btn" onclick="this.closest('.card-block').remove()">&#10005; Remove</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="fg2">
+        <div class="fw"><label class="fl">Job Title / Role &#9999;</label>
+          <input type="text" class="fi exp-role" placeholder="Computer Operator" value="${esc(e.role||"")}"
+            oninput="this.closest('.card-block').querySelector('.card-title').textContent=this.value||'নতুন Experience'"/></div>
+        <div class="fw"><label class="fl">Organization / Company &#9999;</label>
+          <input type="text" class="fi exp-org" placeholder="Sabuj Computer" value="${esc(e.org||"")}"/></div>
+      </div>
+      <div class="fg3">
+        <div class="fw"><label class="fl">Date From &#9999;</label>
+          <input type="text" class="fi exp-from" placeholder="July 2025" value="${esc(e.dateFrom||"")}"/></div>
+        <div class="fw"><label class="fl">Date To &#9999;</label>
+          <input type="text" class="fi exp-to" placeholder="Present" value="${esc(e.dateTo||"")}"/></div>
+        <div class="fw"><label class="fl">Location &#9999;</label>
+          <input type="text" class="fi exp-loc" placeholder="Natore" value="${esc(e.location||"")}"/></div>
+      </div>
+      <div class="fw"><label class="fl">কাজের বিবরণ — প্রতিটি point আলাদা লাইনে &#9999;</label>
+        <textarea class="fta exp-pts" placeholder="High-speed typing.&#10;Training sessions."></textarea>
+      </div>
+    </div>`;
+  b.querySelector(".exp-pts").value=(e.points||[]).join("\n");
   $("exp-container").appendChild(b);
 };
 const getExps=()=>[...document.querySelectorAll("#exp-container .card-block")].map(c=>({role:c.querySelector(".exp-role").value.trim(),org:c.querySelector(".exp-org").value.trim(),dateFrom:c.querySelector(".exp-from").value.trim(),dateTo:c.querySelector(".exp-to").value.trim(),location:c.querySelector(".exp-loc").value.trim(),points:c.querySelector(".exp-pts").value.split("\n").map(s=>s.trim()).filter(Boolean)}));
@@ -418,7 +445,8 @@ window.addSkill=(s={})=>{
   s=s||{};
   const items=(s.items||[]).join("\n");
   const b=document.createElement("div");b.className="card-block";
-  b.innerHTML=`<div class="card-header"><span class="card-title">${esc(s.category||"notun Skill Category")}</span><div class="card-actions"><button class="icon-btn" onclick="toggleCard(this)">v</button><button class="del-btn" onclick="this.closest('.card-block').remove()">X Remove</button></div></div><div class="card-body"><div class="fw"><label class="fl">Category Name (Computer Skills)</label><input type="text" class="fi sk-cat" placeholder="Computer Skills" value="${esc(s.category||"")}" oninput="this.closest('.card-block').querySelector('.card-title').textContent=this.value||'notun Skill'"/></div><div class="fw"><label class="fl">Skills — protiti alada laine</label><textarea class="fta sk-items" placeholder="MS Word&#10;MS Excel&#10;Photoshop">${esc(items)}</textarea></div></div>`;
+  b.innerHTML=`<div class="card-header"><span class="card-title">${esc(s.category||"notun Skill Category")}</span><div class="card-actions"><button class="icon-btn" onclick="toggleCard(this)">v</button><button class="del-btn" onclick="this.closest('.card-block').remove()">X Remove</button></div></div><div class="card-body"><div class="fw"><label class="fl">Category Name (Computer Skills)</label><input type="text" class="fi sk-cat" placeholder="Computer Skills" value="${esc(s.category||"")}" oninput="this.closest('.card-block').querySelector('.card-title').textContent=this.value||'notun Skill'"/></div><div class="fw"><label class="fl">Skills — protiti alada laine</label><textarea class="fta sk-items" placeholder="MS Word&#10;MS Excel&#10;Photoshop"></textarea></div></div>`;
+  b.querySelector(".sk-items").value=(s.items||[]).join("\n");
   $("skills-container").appendChild(b);
 };
 const getSkills=()=>[...document.querySelectorAll("#skills-container .card-block")].map(c=>({category:c.querySelector(".sk-cat").value.trim(),items:c.querySelector(".sk-items").value.split("\n").map(s=>s.trim()).filter(Boolean)}));
