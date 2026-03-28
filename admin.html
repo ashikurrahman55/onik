@@ -278,6 +278,7 @@ button{font-family:Syne,sans-serif;cursor:pointer;border:none;transition:all .25
       <div id="cert-box"></div>
       <button class="addbtn" id="add-cert">+ Notun Certificate jog koro</button>
       <br><button class="savebtn" onclick="saveCert()">&#128190; Save Certifications</button>
+    </div>
     <div class="panel" id="p-msgs">
       <div class="ph">
         <h2>&#128138; Messages / Inbox</h2>
@@ -901,7 +902,7 @@ window.generateAdminCV = function() {
       function hline(x1,x2,yy,col,w){ doc.setDrawColor.apply(doc,col||LGREY); doc.setLineWidth(w||0.3); doc.line(x1,yy,x2,yy); }
       function checkPage(need){ if(y+(need||12)>H-15){ doc.addPage(); y=MT; } }
       function wrapText(text,x,maxW,lineH){
-        var lines=doc.splitTextToSize(text,maxW);
+        var lines=doc.splitTextToSize(String(text||""),maxW);
         lines.forEach(function(l){ checkPage(lineH+2); doc.text(l,x,y); y+=lineH; });
       }
       function sectionHeading(ttl){
@@ -910,18 +911,70 @@ window.generateAdminCV = function() {
         y+=2; hline(ML,W-MR,y,GOLD,0.5); y+=5;
       }
 
+      // Generated date
+      var genDate = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+
+      // PHOTO
+      var PHOTO_W=28, PHOTO_H=35, PHOTO_X=W-MR-PHOTO_W;
+      var photoSrc=null;
+      try{
+        var photoEl=document.getElementById("ph-prev");
+        if(photoEl && photoEl.src && (photoEl.src.startsWith("data:") || photoEl.src.startsWith("http"))){
+          if(photoEl.complete && photoEl.naturalWidth>0){
+            var cnv=document.createElement('canvas');
+            cnv.width=photoEl.naturalWidth; cnv.height=photoEl.naturalHeight;
+            var ctx2=cnv.getContext('2d'); ctx2.drawImage(photoEl,0,0);
+            photoSrc=cnv.toDataURL('image/jpeg',0.85);
+          }
+        }
+      }catch(pe){}
+
+      var textW = photoSrc ? TW-PHOTO_W-6 : TW;
+
+      if(photoSrc){
+        try{ doc.addImage(photoSrc,'JPEG',PHOTO_X,MT,PHOTO_W,PHOTO_H); }catch(ie){}
+      }
+
       // HEADER
-      setFont("bold",22,BLACK); doc.text(name,ML,y); y+=7;
-      setFont("normal",10.5,GOLD); doc.text(title,ML,y); y+=5;
+      setFont("bold",20,BLACK); doc.text(name,ML,y,{maxWidth:textW}); y+=6;
+      setFont("normal",10,GOLD); doc.text(title,ML,y,{maxWidth:textW}); y+=6;
+      hline(ML,W-MR,y,LGREY,0.4); y+=5;
+
+      // Contact info with icons - each on own line pair for clarity
+      var contactItems=[];
+      if(email)    contactItems.push({icon:"Email:",    val:email});
+      if(phone)    contactItems.push({icon:"Phone:",    val:phone});
+      if(loc)      contactItems.push({icon:"Address:",  val:loc});
+      if(linkedin) contactItems.push({icon:"LinkedIn:", val:linkedin.replace("https://","")});
+
+      // Draw contact in two columns if multiple items
+      var iconW=18, colW=(textW-6)/2;
+      var col1=[],col2=[];
+      contactItems.forEach(function(ci,i){ if(i%2===0) col1.push(ci); else col2.push(ci); });
+      var maxRows=Math.max(col1.length,col2.length);
+      setFont("bold",7.5,GREY);
+      for(var ri=0;ri<maxRows;ri++){
+        var rowY=y;
+        if(col1[ri]){
+          setFont("bold",7,GOLD);
+          doc.text(col1[ri].icon, ML, rowY);
+          setFont("normal",7,GREY);
+          var v1=doc.splitTextToSize(col1[ri].val, colW-iconW-2);
+          doc.text(v1[0]||"", ML+iconW, rowY);
+        }
+        if(col2[ri]){
+          var col2X=ML+colW+6;
+          setFont("bold",7,GOLD);
+          doc.text(col2[ri].icon, col2X, rowY);
+          setFont("normal",7,GREY);
+          var v2=doc.splitTextToSize(col2[ri].val, colW-iconW-2);
+          doc.text(v2[0]||"", col2X+iconW, rowY);
+        }
+        y+=5;
+      }
       hline(ML,W-MR,y,LGREY,0.4); y+=4;
-      setFont("normal",8,GREY);
-      var contactParts=[];
-      if(email) contactParts.push("E: "+email);
-      if(phone) contactParts.push("T: "+phone);
-      if(loc)   contactParts.push(loc);
-      if(linkedin) contactParts.push(linkedin.replace("https://",""));
-      doc.text(contactParts.join("   |   "),ML,y,{maxWidth:TW}); y+=4;
-      hline(ML,W-MR,y,LGREY,0.4); y+=8;
+      if(photoSrc){ y=Math.max(y, MT+PHOTO_H+5); }
+      y+=3;
 
       // SUMMARY
       if(summary){ sectionHeading("Professional Summary"); setFont("normal",9,DARK); wrapText(summary,ML,TW,5); y+=2; }
@@ -930,15 +983,32 @@ window.generateAdminCV = function() {
       if(experiences.length>0){
         sectionHeading("Work Experience");
         experiences.forEach(function(e){
-          checkPage(20);
-          setFont("bold",10,BLACK); doc.text(e.role,ML,y);
+          checkPage(22);
+          var dtStr=[e.dateFrom,e.dateTo].filter(Boolean).join(" – ")+(e.location?" · "+e.location:"");
           setFont("normal",8,GREY);
-          var dtStr=[e.dateFrom,e.dateTo].filter(Boolean).join(" \u2013 ")+(e.location?" \u00B7 "+e.location:"");
-          doc.text(dtStr,W-MR-doc.getTextWidth(dtStr),y); y+=4.5;
-          setFont("normal",8.5,GOLD); doc.text(e.org,ML,y); y+=5;
+          var dtW=doc.getTextWidth(dtStr);
+          setFont("bold",10,BLACK);
+          var roleAvailW=TW-dtW-6;
+          var roleLines=doc.splitTextToSize(e.role||"",roleAvailW);
+          doc.text(roleLines[0]||"",ML,y);
+          setFont("normal",8,GREY);
+          doc.text(dtStr,W-MR-dtW,y);
+          y+=4.8;
+          if(roleLines.length>1){
+            setFont("bold",10,BLACK);
+            roleLines.slice(1).forEach(function(rl){doc.text(rl,ML,y);y+=4.8;});
+          }
+          setFont("normal",9,GOLD);
+          var orgLines=doc.splitTextToSize(e.org||"",TW);
+          orgLines.forEach(function(ol){doc.text(ol,ML,y);y+=4.5;});
+          y+=1;
           setFont("normal",8.5,DARK);
-          (e.points||[]).forEach(function(pt){ checkPage(8); doc.text("\u2022",ML,y); wrapText(pt,ML+5,TW-5,4.8); });
-          y+=3;
+          (e.points||[]).forEach(function(pt){
+            checkPage(9);
+            doc.text("•",ML,y);
+            wrapText(pt,ML+5,TW-5,4.8);
+          });
+          y+=4;
         });
       }
 
@@ -946,14 +1016,21 @@ window.generateAdminCV = function() {
       if(skills.length>0){
         sectionHeading("Skills");
         skills.forEach(function(s){
-          checkPage(10);
-          var rowText=(s.items||[]).join(" \u2022 ");
-          setFont("bold",8.5,BLACK); doc.text((s.category||"")+": ",ML,y);
-          var lw=doc.getTextWidth((s.category||"")+": ");
+          checkPage(12);
+          var catLabel=(s.category||"")+": ";
+          setFont("bold",8.5,BLACK);
+          var lw=doc.getTextWidth(catLabel);
+          doc.text(catLabel,ML,y);
+          var itemNames=(s.items||[]).map(function(it){
+            return (typeof it==="object"&&it!==null)?(it.name||""):String(it||"");
+          }).filter(Boolean);
+          var rowText=itemNames.join("  •  ");
           setFont("normal",8.5,DARK);
           var wrapped=doc.splitTextToSize(rowText,TW-lw);
-          doc.text(wrapped[0]||"",ML+lw,y); y+=4.8;
-          if(wrapped.length>1){ wrapped.slice(1).forEach(function(ln){ checkPage(6); doc.text(ln,ML+lw,y); y+=4.8; }); }
+          doc.text(wrapped[0]||"",ML+lw,y);y+=5;
+          if(wrapped.length>1){
+            wrapped.slice(1).forEach(function(ln){checkPage(7);doc.text(ln,ML+lw,y);y+=5;});
+          }
         });
         y+=2;
       }
@@ -962,12 +1039,24 @@ window.generateAdminCV = function() {
       if(education.length>0){
         sectionHeading("Education");
         education.forEach(function(e){
-          checkPage(14);
-          setFont("bold",9.5,BLACK); doc.text(e.degree,ML,y);
-          if(e.gpa&&e.gpa!=="\u2014"){ setFont("bold",9.5,GOLD); var gs="GPA: "+e.gpa; doc.text(gs,W-MR-doc.getTextWidth(gs),y); }
+          checkPage(16);
+          var gpaStr=(e.gpa&&e.gpa!=="—")?"GPA: "+e.gpa:"";
+          setFont("bold",9.5,GOLD);
+          var gpaW=gpaStr?doc.getTextWidth(gpaStr):0;
+          var degW=gpaW>0?TW-gpaW-4:TW;
+          setFont("bold",9.5,BLACK);
+          var degLines=doc.splitTextToSize(e.degree||"",degW);
+          doc.text(degLines[0]||"",ML,y);
+          if(gpaStr){setFont("bold",9.5,GOLD);doc.text(gpaStr,W-MR-gpaW,y);}
           y+=4.5;
-          setFont("normal",8.5,GREY); doc.text(e.institution+(e.year?" | "+e.year:""),ML,y);
-          if(e.status) doc.text(e.status,W-MR-doc.getTextWidth(e.status),y);
+          if(degLines.length>1){setFont("bold",9.5,BLACK);degLines.slice(1).forEach(function(dl){doc.text(dl,ML,y);y+=4.5;});}
+          var instStr=(e.institution||"")+(e.year?" | "+e.year:"");
+          var stStr=e.status||"";
+          setFont("normal",8,GREY);
+          var stW=stStr?doc.getTextWidth(stStr):0;
+          var instLines=doc.splitTextToSize(instStr,stW>0?TW-stW-4:TW);
+          doc.text(instLines[0]||"",ML,y);
+          if(stStr){doc.text(stStr,W-MR-stW,y);}
           y+=6;
         });
       }
@@ -976,20 +1065,37 @@ window.generateAdminCV = function() {
       if(certifications.length>0){
         sectionHeading("Certifications");
         certifications.forEach(function(c){
-          checkPage(8);
-          doc.text("\u2022",ML,y);
-          setFont("bold",8.5,BLACK); doc.text(c.name,ML+5,y);
-          if(c.issuer){ setFont("normal",8,GREY); doc.text(" \u2014 "+c.issuer,ML+5+doc.getTextWidth(c.name),y); }
-          setFont("normal",8.5,DARK); y+=5;
+          checkPage(10);
+          doc.text("•",ML,y);
+          setFont("bold",8.5,BLACK);
+          var nameW=doc.getTextWidth(c.name||"");
+          var issuerPart=c.issuer?" — "+c.issuer:"";
+          setFont("normal",8,GREY);
+          var issuerW=doc.getTextWidth(issuerPart);
+          if(nameW+issuerW<=TW-8){
+            setFont("bold",8.5,BLACK);doc.text(c.name||"",ML+5,y);
+            if(c.issuer){setFont("normal",8,GREY);doc.text(issuerPart,ML+5+nameW,y);}
+            y+=5;
+          } else {
+            setFont("bold",8.5,BLACK);
+            var nLines=doc.splitTextToSize(c.name||"",TW-8);
+            nLines.forEach(function(nl){doc.text(nl,ML+5,y);y+=4.5;});
+            if(c.issuer){
+              setFont("normal",8,GREY);
+              var iLines=doc.splitTextToSize(issuerPart,TW-8);
+              iLines.forEach(function(il){checkPage(6);doc.text(il,ML+5,y);y+=4.5;});
+            }
+            y+=1;
+          }
         });
       }
-
-      // FOOTER
+      // FOOTER with date
       var tp=doc.internal.getNumberOfPages();
       for(var p=1;p<=tp;p++){
         doc.setPage(p); hline(ML,W-MR,H-12,LGREY,0.3);
         setFont("normal",7,GREY);
         doc.text(name+" \u2014 Resume",ML,H-8);
+        doc.text("Generated: "+genDate,W/2,H-8,{align:"center"});
         doc.text("Page "+p+" of "+tp,W-MR,H-8,{align:"right"});
       }
 

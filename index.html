@@ -690,7 +690,7 @@ footer{background:var(--ink);color:#4a4040;padding:2.5rem 5rem;display:flex;alig
         <div class="i-row"><span class="i-k">WhatsApp</span><span class="i-v d-wa-text">+880 1973 321755</span></div>
         <div class="i-row"><span class="i-k">Location</span><span class="i-v d-location">Bagatipara, Natore, Bangladesh</span></div>
         <div class="i-row"><span class="i-k">Status</span><span class="i-v">Available for Work ✅</span></div>
-      </div></div></div>
+      </div>
       <div class="htags" id="about-tags">
         <span class="htag">MS Office</span><span class="htag">Data Entry</span><span class="htag">Photoshop</span>
         <span class="htag">Training</span><span class="htag">Bengali Typing</span><span class="htag">English Typing</span>
@@ -1176,16 +1176,38 @@ function downloadResume(btn) {
       line(ML, W - MR, y, LGREY, 0.4);
       y += 4;
       setFont('normal', 8, GREY);
-      const contactStr = [
-        email ? '\u2709 ' + email : '',
-        phone ? '\u2706 ' + phone : '',
-        loc   ? '\u2316 ' + loc   : '',
-        'in  linkedin.com/in/anikashikur51'
-      ].filter(Boolean).join('   |   ');
-      doc.text(contactStr, ML, y, { maxWidth: TW });
-      y += 4;
+      // Contact info - two column layout with plain labels
+      const contactItems = [];
+      if(email)  contactItems.push({icon:"Email:",    val:email});
+      if(phone)  contactItems.push({icon:"Phone:",    val:phone});
+      if(loc)    contactItems.push({icon:"Address:",  val:loc});
+      contactItems.push({icon:"LinkedIn:", val:"linkedin.com/in/anikashikur51"});
+
+      const iconW2=18, colW2=(TW-6)/2;
+      const col1=[],col2=[];
+      contactItems.forEach(function(ci,i){ if(i%2===0) col1.push(ci); else col2.push(ci); });
+      const maxRows2=Math.max(col1.length,col2.length);
+      for(let ri=0;ri<maxRows2;ri++){
+        const rowY=y;
+        if(col1[ri]){
+          setFont('bold',7,GOLD);
+          doc.text(col1[ri].icon, ML, rowY);
+          setFont('normal',7,GREY);
+          const v1=doc.splitTextToSize(col1[ri].val, colW2-iconW2-2);
+          doc.text(v1[0]||'', ML+iconW2, rowY);
+        }
+        if(col2[ri]){
+          const col2X=ML+colW2+6;
+          setFont('bold',7,GOLD);
+          doc.text(col2[ri].icon, col2X, rowY);
+          setFont('normal',7,GREY);
+          const v2=doc.splitTextToSize(col2[ri].val, colW2-iconW2-2);
+          doc.text(v2[0]||'', col2X+iconW2, rowY);
+        }
+        y+=5;
+      }
       line(ML, W - MR, y, LGREY, 0.4);
-      y += 8;
+      y += 6;
 
       // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
       //  ABOUT / SUMMARY
@@ -1214,28 +1236,36 @@ function downloadResume(btn) {
           const place = item.querySelector('.e-pl')    ? item.querySelector('.e-pl').textContent.trim()    : '';
           const pts   = [...(item.querySelectorAll('.e-pts li') || [])].map(li => li.textContent.trim());
 
-          // Role + date on same line
-          setFont('bold', 10, BLACK);
-          doc.text(role, ML, y);
-          setFont('normal', 8, GREY);
+          // Role + date on same line (with overflow protection)
           const dtStr = dt + (place ? ' \u00B7 ' + place : '');
+          setFont('normal', 8, GREY);
           const dtW = doc.getTextWidth(dtStr);
+          setFont('bold', 10, BLACK);
+          const roleAvailW = TW - dtW - 6;
+          const roleLines = doc.splitTextToSize(role, roleAvailW);
+          doc.text(roleLines[0]||'', ML, y);
+          setFont('normal', 8, GREY);
           doc.text(dtStr, W - MR - dtW, y);
-          y += 4.5;
+          y += 4.8;
+          if(roleLines.length>1){
+            setFont('bold',10,BLACK);
+            roleLines.slice(1).forEach(rl=>{ doc.text(rl,ML,y); y+=4.8; });
+          }
 
           // Organisation
-          setFont('normal', 8.5, GOLD);
-          doc.text(org, ML, y);
-          y += 5;
+          setFont('normal', 9, GOLD);
+          const orgLines=doc.splitTextToSize(org,TW);
+          orgLines.forEach(ol=>{ doc.text(ol,ML,y); y+=4.5; });
+          y+=1;
 
           // Bullet points
           setFont('normal', 8.5, DARK);
           pts.forEach(pt => {
-            checkPage(8);
+            checkPage(9);
             doc.text('\u2022', ML, y);
             wrapText(pt, ML + 5, TW - 5, 4.8);
           });
-          y += 3;
+          y += 4;
         });
       }
 
@@ -1318,13 +1348,26 @@ function downloadResume(btn) {
           const issuer= card.querySelector('.c-b') ? card.querySelector('.c-b').textContent.trim() : '';
           doc.text('\u2022', ML, y);
           setFont('bold', 8.5, BLACK);
-          doc.text(name2, ML + 5, y);
-          if (issuer) {
-            setFont('normal', 8, GREY);
-            doc.text(' \u2014 ' + issuer, ML + 5 + doc.getTextWidth(name2), y);
+          const name2W = doc.getTextWidth(name2);
+          const issuerPart = issuer ? ' \u2014 ' + issuer : '';
+          setFont('normal', 8, GREY);
+          const issuerW2 = doc.getTextWidth(issuerPart);
+          if(name2W + issuerW2 <= TW-8){
+            setFont('bold', 8.5, BLACK); doc.text(name2, ML+5, y);
+            if(issuer){ setFont('normal', 8, GREY); doc.text(issuerPart, ML+5+name2W, y); }
+            y += 5;
+          } else {
+            setFont('bold', 8.5, BLACK);
+            const nLines2=doc.splitTextToSize(name2,TW-8);
+            nLines2.forEach(nl=>{ doc.text(nl,ML+5,y); y+=4.5; });
+            if(issuer){
+              setFont('normal',8,GREY);
+              const iLines2=doc.splitTextToSize(issuerPart,TW-8);
+              iLines2.forEach(il=>{ checkPage(6); doc.text(il,ML+5,y); y+=4.5; });
+            }
+            y+=1;
           }
           setFont('normal', 8.5, DARK);
-          y += 5;
         });
       }
 
@@ -1332,11 +1375,13 @@ function downloadResume(btn) {
       //  FOOTER LINE
       // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
       const totalPages = doc.internal.getNumberOfPages();
+      const genDate2 = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
       for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);
         line(ML, W - MR, H - 12, LGREY, 0.3);
         setFont('normal', 7, GREY);
         doc.text(name + ' \u2014 Resume', ML, H - 8);
+        doc.text('Generated: ' + genDate2, W/2, H - 8, {align:'center'});
         doc.text('Page ' + p + ' of ' + totalPages, W - MR, H - 8, { align: 'right' });
       }
 
